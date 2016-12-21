@@ -2,8 +2,11 @@ package com.example.networkmanager;
 
 import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -19,6 +22,7 @@ import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.telephony.TelephonyManager;
 import android.telephony.gsm.GsmCellLocation;
@@ -30,6 +34,7 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.view.View.OnClickListener;
+import GBDT.*;
 
 @SuppressLint("SimpleDateFormat")
 public class MainActivity extends Activity {
@@ -50,6 +55,9 @@ public class MainActivity extends Activity {
 	private double lastLatitude = 0.0;
 	private double lastLongitude = 0.0;
 	private int lastMinute = 0;
+	private int recordNum = 0;
+	private Predictor predictor;
+	private List<String> netInfoList = new ArrayList<String>();
 	private LocationListener locationListener = new LocationListener() {
 		// Provider的状态在可用、暂时不可用和无服务三个状态直接切换时触发此函数
 		@Override
@@ -89,35 +97,51 @@ public class MainActivity extends Activity {
 		recordNumText = (TextView) findViewById(R.id.textView3);
 		netInfoText   = (TextView) findViewById(R.id.textView4);
 		mContext      = getApplicationContext();
+		predictor = new Predictor();
+		//app开启时训练GBDT model
+		predictor.train();
 
 		//获取按钮控件，设置事件监听
 		Button button = (Button) findViewById(R.id.button1);
 		button.setOnClickListener(new ButtonListener01());
 		
 		locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-		Runnable GPSrunnable = new Runnable(){
+		Runnable netRunnable = new Runnable(){
 			public void run(){
 				getLocationByGPS();
 				getLocationByBaseStation();
 				getCurrentTime();
-				dataToFile();
-				info.setText("纬度：" + lastLatitude + "\n" + "经度：" + lastLongitude);
-				handler.postDelayed(this,30000);//每5s获取一次位置信息和时间信息
+				String currentInfo = dataToFile();
+				double pred = 0.0;
+				if(currentInfo != null){
+					// 根据鞠策值来决定是否开启WiFi
+					pred = predictor.predict(currentInfo);
+					boolean WiFiEnable = false;
+					if(pred > 0.5){
+						WiFiEnable = true;
+					}
+					if(WiFiEnable){
+						if(!wifiManager.isWifiEnabled()){
+							wifiManager.setWifiEnabled(true);				
+						}
+					}
+					info.setText("纬度：" + lastLatitude + "\n" + "经度：" + lastLongitude+ "\n" + "预测：" + pred);
+				}
+				handler.postDelayed(this,15000);//每15s获取一次位置信息和时间信息
 			}
 		};
 		//判断GPS是否打开，
 		if(locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)){
 			//getLocationByGPS();
-			handler.postDelayed(GPSrunnable,1000); 
+			handler.postDelayed(netRunnable,1000); 
 		}else{
 			Toast.makeText(this, "请开启GPS！", Toast.LENGTH_SHORT).show();
-			handler.postDelayed(GPSrunnable,1000); 
+			handler.postDelayed(netRunnable,1000);
 		}
 		
 	}
-	public void dataToFile(){
-		String filename  = "network_info_log.txt";
-		FileHelper fhelper = new FileHelper(mContext,filename);
+	public String dataToFile(){
+		FileSave fs = new FileSave();
 		int networkStatus = 0;
 		networkStatus = getNetworkStatus();
 		if(lastLatitude != latitude || lastLongitude != longitude){
@@ -135,47 +159,26 @@ public class MainActivity extends Activity {
 				+netInfoText.getText().toString()+ "," //接入的基站信息
 				+String.valueOf(networkStatus)+"\n" ;  //上网所使用的网络WiFi或者LTE
 		String currentContent = fileContent.substring(20);
-
+		fileText.setText(fileContent);
 		int currentMinute = Integer.parseInt(fileContent.substring(14,16));
-		if(currentContent.equals(lastContent) && Math.abs(currentMinute - lastMinute) < 5) return;
-
-		String detail = fhelper.readData();
-		fileText.setText(detail);
-		String[] logs = detail.split("\n");
-		recordNumText.setText("记录数： "+String.valueOf(logs.length));
-		if(logs.length > 9){
-			fhelper.dataSave(fileContent,Context.MODE_PRIVATE);
-		}
-		else{
-			fhelper.dataSave(fileContent,Context.MODE_APPEND);
+		if(currentContent.equals(lastContent) && Math.abs(currentMinute - lastMinute) < 5) return null;
+		recordNum++;
+		recordNumText.setText("记录数： "+String.valueOf(recordNum));
+		netInfoList.add(fileContent);
+		if(netInfoList.size() == 30){ //满30条记录后写入txt文件
+			for(int i = 0;i<30;i++){
+				String tempFileContent = netInfoList.get(i);
+				fs.createExternalStoragePublicPicture(mContext, tempFileContent);
+			}
+			netInfoList = new ArrayList<String>();
 		}
 		lastContent = currentContent;
 		lastMinute = currentMinute;
+		return fileContent;
 	}
-	/*
-	public void toggleGPS(){
-		Intent gpsIntent = new Intent();
-		gpsIntent.setClassName("com.android.settings", "aom.android.settings.widget.SettingsAppWidgetProvider");
-		gpsIntent.addCategory("android.intent.category.ALTERNATIVE");
-		gpsIntent.setData(Uri.parse("custom:3"));
-		try{
-			PendingIntent.getBroadcast(this, 0, gpsIntent, 0).send();
-		}catch (CanceledException e) {
-			e.printStackTrace();
-			locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1000, 0, locationListener);
-			Location location1 = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-			if (location1 != null) {
-				latitude = location1.getLatitude(); // 经度
-				longitude = location1.getLongitude(); // 纬度
-			}
-		}
-	}*/
 	private int getNetworkStatus(){
 		if(wifiManager.isWifiEnabled()){
 			return 1;
-		}
-		else if(getMobileDataState()){
-			return 2;
 		}
 		else return 0;
 	}
@@ -192,13 +195,11 @@ public class MainActivity extends Activity {
 	}
 	
 	private void getCurrentTime(){
-		SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+		SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());	
 		Calendar calendar = Calendar.getInstance();
-		Date date = calendar.getTime();
-		dateStr = format.format(date);
+		dateStr = format.format(new Date());
 		dayIndex = calendar.get(Calendar.DAY_OF_WEEK);
 	}
-	
 	// 获取基站的位置信息
     private void getLocationByBaseStation() {  
         TelephonyManager tm = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);  
@@ -257,16 +258,9 @@ public class MainActivity extends Activity {
 		public void onClick(View arg0){	
 			if(wifiManager.isWifiEnabled()){
 				wifiManager.setWifiEnabled(false);				
-				if(!getMobileDataState())
-					setMoblieData(true);
 			}
 			else{
-				if(getMobileDataState()){
-					setMoblieData(false);				
-				}
-				if(!wifiManager.isWifiEnabled()){
-					wifiManager.setWifiEnabled(true);
-				}
+				wifiManager.setWifiEnabled(true);
 			}
 		}
 	}

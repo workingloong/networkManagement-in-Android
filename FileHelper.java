@@ -1,9 +1,12 @@
 package com.example.networkmanager;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 
 import android.content.Context;
+import android.os.Environment;
+import android.util.Log;
 import android.widget.TextView;
 
 public class FileHelper {
@@ -27,6 +30,14 @@ public class FileHelper {
 		output.close();
 	}
 	
+	public File getLogStorageDir(String fileName){
+		File file = new File(Environment.getDataDirectory(),fileName);
+		if(!file.mkdir()){
+			Log.e("network Manager", "Directory not created");
+		}
+		return file;
+	}
+
 	//定义文件读取方法
 	public String read(String fileName) throws Exception{
 		FileInputStream input = mContext.openFileInput(fileName);
