@@ -26,7 +26,7 @@ public class RegressionTreeGenerator {
 		}
 		root.samples_num = y.length;
 		root.predict_value = sum/y.length;
-		root.friedman_mse = friedman_mse(y);
+		root.friedmanMse = friedman_mse(y);
 		// generate leaf nodes
 		if(y.length < min_leaves || max_depth <= 0){
 			root.split_value = 0.0;
@@ -43,7 +43,6 @@ public class RegressionTreeGenerator {
 		int right_samples_num = Xtrain.length - left_samples_num;
 		int features_num = Xtrain[0].length;
 		
-		//鏍规嵁鏈�浣崇壒寰佺殑鍒嗚鍊�,灏嗚缁冮泦鍒掑垎涓哄乏鍙冲瓙闆�
 		double[][] Xtrain_left = new double[left_samples_num][features_num];
 		double[][] Xtrain_right = new double[right_samples_num][features_num];
 		double[] y_left = new double[left_samples_num];
@@ -104,8 +103,8 @@ public class RegressionTreeGenerator {
 		double total_error = Math.pow(sum,2)/samples;
 		for(int i = 1;i<samples;i++){
 			if(features[i][0] > prev_value){
-				sum_left = cal_sum_left(features,sum_left,i,prev_index);
-				sum_right = cal_sum_right(features,sum_right,i,prev_index);
+				sum_left = calSumLeft(features,sum_left,i,prev_index);
+				sum_right = calSumRight(features,sum_right,i,prev_index);
 				double temp_gain = Math.pow(sum_left,2)/i + Math.pow(sum_right,2)/(samples-i) - total_error;
 				if(temp_gain > delta_gain){
 					delta_gain = temp_gain;
@@ -131,19 +130,19 @@ public class RegressionTreeGenerator {
 		}
 	}
 	
-	public double cal_sum_left(double[][] features, double sum_left,int split_index,int prev){
+	public double calSumLeft(double[][] features, double sum_left,int split_index,int prev){
 		for(int i = prev;i<split_index;i++){
 			sum_left += features[i][1];
 		}
 		return sum_left;
 	}
-	public double cal_sum_right(double[][] features, double sum_right,int split_index,int prev){
+	public double calSumRight(double[][] features, double sum_right,int split_index,int prev{
 		for(int i = prev;i<split_index;i++){
 			sum_right -= features[i][1];
 		}
 		return sum_right;
 	}
-	public double friedman_mse(double[] y){
+	public double friedmanMse(double[] y){
 		double sum = 0;
 		for(int i = 0;i<y.length;i++){
 			sum += y[i];
