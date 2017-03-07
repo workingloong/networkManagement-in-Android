@@ -23,7 +23,7 @@ public class GradientBoostingDecisionTree {
 		for(int i = 0;i< y.length;i++){
 			residual[i] = 1-2*y[i];
 		}
-		// 灏� 0,1绫诲埆杞崲涓� 1 鍜� -1
+		// transform 1/0 to 1/-1
 		binaryToPN(y);
 		
 		// initialize the predictions
